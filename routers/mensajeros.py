@@ -1,36 +1,50 @@
+# routers/mensajeros.py
 from fastapi import APIRouter, HTTPException, Request
-# Update the import path if database.py is in another folder, e.g., 'app.database'
-# from app.database import supabase
-import supabase
+from starlette.concurrency import run_in_threadpool
+from database import supabase
 
 router = APIRouter(prefix="/mensajeros", tags=["Mensajeros"])
 
 @router.get("/mostrarRegistro")
-def listar_mensajeros():
+async def listar_mensajeros():
     try:
-        response = supabase.table("mensajeros").select("*").execute()
-        return {"total": len(response.data), "data": response.data}
+        # Ejecutar la llamada a supabase en un hilo para no bloquear el event loop
+        def _call():
+            return supabase.table("mensajeros").select("*").execute()
+        response = await run_in_threadpool(_call)
+
+        # Si la librería devuelve .data o response.get("data") adaptamos:
+        data = getattr(response, "data", None) or (response.get("data") if isinstance(response, dict) else None)
+        if data is None:
+            # Intenta con response.data si es objeto
+            try:
+                data = response.data
+            except Exception:
+                data = []
+
+        return {"total": len(data), "data": data}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener registros: {e}")
 
 @router.post("/crearRegistro")
 async def crear_mensajero(request: Request):
     try:
-        # 🚫 No validamos nada, solo recibimos JSON puro
         data = await request.json()
-        print("📦 Datos recibidos:", data)
+        # Convertir None -> "" para evitar errores si lo deseas
+        data = {k: ("" if v is None else v) for k, v in data.items()}
 
-        # Convertir todos los valores None a string vacío
-        data = {k: ("" if v is None else str(v)) for k, v in data.items()}
+        def _insert():
+            return supabase.table("mensajeros").insert(data).execute()
+        response = await run_in_threadpool(_insert)
 
-        # Enviar a Supabase directamente
-        response = supabase.table("mensajeros").insert(data).execute()
-
-        if not response.data:
+        inserted = getattr(response, "data", None) or (response.get("data") if isinstance(response, dict) else None)
+        if not inserted:
             raise HTTPException(status_code=400, detail="No se pudo insertar el registro")
 
-        return {"message": "Mensajero creado correctamente", "data": response.data}
+        return {"message": "Mensajero creado correctamente", "data": inserted}
 
+    except HTTPException:
+        raise
     except Exception as e:
-        print("❌ Error al insertar:", e)
         raise HTTPException(status_code=500, detail=f"Error al guardar el registro: {e}")
