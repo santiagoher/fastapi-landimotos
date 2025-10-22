@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Request
 # Update the import path if database.py is in another folder, e.g., 'app.database'
 # from app.database import supabase
 
-from ..database import supabase
+from database import supabase
 
 router = APIRouter(prefix="/mensajeros", tags=["Mensajeros"])
 
