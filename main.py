@@ -4,6 +4,7 @@ from routers import mensajeros
 from fastapi.responses import JSONResponse
 
 
+
 app = FastAPI(title="API Mensajeros - Supabase")
 
 # 🔒 Middleware CORS
